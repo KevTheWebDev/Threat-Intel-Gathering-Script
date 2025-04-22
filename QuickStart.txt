@@ -1,0 +1,14 @@
+git clone https://github.com/<your‑user>/threat‑intel‑gatherer.git
+cd threat‑intel‑gatherer
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+
+# Add your OTX key (free to generate) to a .env file
+cp .env.example .env
+echo "OTX_API_KEY=<paste‑your‑key>" >> .env
+
+# Ingest the latest data
+python main.py ingest
+
+# Run simple analytics
+python main.py analyze
