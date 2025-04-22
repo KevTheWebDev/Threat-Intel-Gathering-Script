@@ -89,28 +89,38 @@ def fetch_urlhaus() -> list[tuple]:
 
 
 def fetch_otx(ioc_type: str = "IPv4", days: int = 1, limit: int = 5000) -> list[tuple]:
-    """Fetch recent indicators from OTX export API."""
+    """Fetch recent indicators from OTX export API.
+
+    Returns list[(indicator, type, source, first_seen)].
+    On any HTTP error we print a warning and return an empty list
+    so the rest of the pipeline keeps running.
+    """
     load_dotenv()
     api_key = os.getenv("OTX_API_KEY")
     if not api_key:
-        print("⚠️  Skipping OTX (no OTX_API_KEY set)", file=sys.stderr)
+        print("⚠️  Skipping OTX (no OTX_API_KEY set)")
         return []
 
     since = (datetime.utcnow() - timedelta(days=days)).isoformat(timespec="seconds") + "Z"
-    url = OTX_EXPORT_TEMPLATE.format(
-        ioc_type=ioc_type,
-        api_key=api_key,
-        limit=limit,
-        since=since,
+    url = (
+        "https://otx.alienvault.com/api/v1/indicators/export"
+        f"?type={ioc_type}&limit={limit}&modified_since={since}"
     )
-    resp = requests.get(url, timeout=30)
-    resp.raise_for_status()
-    rows = [
-        (line.strip(), classify(line.strip()), "AlienVault OTX", since)
+    headers = {"X-OTX-API-KEY": api_key}
+
+    try:
+        resp = requests.get(url, headers=headers, timeout=30)
+        resp.raise_for_status()
+    except requests.HTTPError as e:
+        print(f"⚠️  OTX request failed ({e}); continuing without OTX.")
+        return []
+
+    indicators = [
+        (line, classify(line), "AlienVault OTX", since)
         for line in resp.text.splitlines()
-        if line.strip() and not line.startswith("#")
+        if line and not line.startswith("#")
     ]
-    return rows
+    return indicators
 
 
 # ────────────────────────── analytics ────────────────────────
@@ -175,3 +185,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
